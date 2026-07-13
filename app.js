@@ -91,24 +91,9 @@ function renderHeaderUser() {
   el.textContent = "👤 " + name + mannschaftHinweis + (currentIsAdmin ? " (Admin)" : "");
 }
 
-function activateTab(name) {
-  document.querySelectorAll("nav button[data-tab]").forEach((b) => b.classList.remove("active"));
-  document.querySelectorAll(".tab-section").forEach((s) => s.classList.remove("active"));
-  document.querySelector(`nav button[data-tab="${name}"]`).classList.add("active");
-  document.getElementById("tab-" + name).classList.add("active");
-}
-
-function setupTabs() {
-  document.querySelectorAll("nav button[data-tab]").forEach((b) => {
-    b.addEventListener("click", () => {
-      activateTab(b.dataset.tab);
-      if (b.dataset.tab === "neuer-auftrag") ensureTrainerProfiles();
-    });
-  });
-
+function setupVersionBadge() {
   const versionBadgeHeader = document.getElementById("version-badge");
   const openVersionHistory = () => {
-    activateTab("auftraege");
     const panel = document.getElementById("changelog-panel");
     if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -137,12 +122,27 @@ async function ensureTrainerProfiles() {
   }
 }
 
-// ---------- Neuer Auftrag (Editor) ----------
+// ---------- Neuer Auftrag (Editor) — Formular direkt auf der Aufträge-Seite,
+// kein eigener Tab (Nutzerwunsch: "in die Oberfläche integrieren") ----------
 
 function resetAuftragForm() {
   document.getElementById("f-mannschaft").value = "";
   document.getElementById("f-datum").value = localDateIso();
   document.getElementById("f-notiz").value = "";
+  showFormError("");
+}
+
+function showNeuerAuftragForm() {
+  document.getElementById("neuer-auftrag-card").style.display = "block";
+  document.getElementById("btn-neuer-auftrag").style.display = "none";
+  ensureTrainerProfiles();
+  document.getElementById("f-mannschaft").focus();
+}
+
+function hideNeuerAuftragForm() {
+  document.getElementById("neuer-auftrag-card").style.display = "none";
+  document.getElementById("btn-neuer-auftrag").style.display = canEdit() ? "" : "none";
+  resetAuftragForm();
 }
 
 function showFormError(msg) {
@@ -188,9 +188,8 @@ async function submitAuftrag() {
       erledigtAm: null
     };
     await saveWithConflictRetry((data) => { data.auftraege.push(auftrag); });
-    resetAuftragForm();
     renderAuftraege();
-    activateTab("auftraege");
+    hideNeuerAuftragForm();
   } catch (e) {
     showFormError("Fehler beim Speichern: " + e.message);
   } finally {
@@ -340,10 +339,12 @@ async function init() {
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
   document.getElementById("version-badge-2").textContent = "v" + APP_VERSION;
   renderChangelog();
-  setupTabs();
+  setupVersionBadge();
 
   document.getElementById("f-datum").value = localDateIso();
   document.getElementById("btn-submit-auftrag").addEventListener("click", submitAuftrag);
+  document.getElementById("btn-neuer-auftrag").addEventListener("click", showNeuerAuftragForm);
+  document.getElementById("btn-cancel-neuer-auftrag").addEventListener("click", hideNeuerAuftragForm);
 
   document.getElementById("auftraege-rows").addEventListener("click", (e) => {
     const row = e.target.closest(".auftrag-row");
@@ -376,7 +377,7 @@ async function init() {
     currentNachname = me.nachname || null;
     currentMannschaften = Array.isArray(me.mannschaften) ? me.mannschaften : [];
     appData = normalizeAppData(data);
-    document.getElementById("nav-neuer-auftrag").style.display = canEdit() ? "" : "none";
+    document.getElementById("btn-neuer-auftrag").style.display = canEdit() ? "" : "none";
     startApp();
     renderHeaderUser();
     renderAuftraege();

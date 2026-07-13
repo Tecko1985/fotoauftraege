@@ -38,30 +38,7 @@ header h1 { font-size: 20px; font-weight: 600; display: flex; align-items: cente
 .header-logo { height: 44px; width: auto; display: block; }
 .header-user { font-size: 13px; opacity: 0.95; display: flex; align-items: center; gap: 6px; }
 
-nav {
-  display: flex;
-  gap: 4px;
-  background: var(--white);
-  padding: 8px 28px 0;
-  border-bottom: 1px solid var(--border);
-}
-nav button {
-  background: none;
-  border: none;
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 3px solid transparent;
-  border-radius: 8px 8px 0 0;
-}
-nav button:hover { background: var(--gray); }
-nav button.active { color: var(--blue); border-bottom-color: var(--blue); }
-
 main { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
-.tab-section { display: none; }
-.tab-section.active { display: block; }
 
 .card {
   background: var(--white);
