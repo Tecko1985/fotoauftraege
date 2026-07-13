@@ -11,6 +11,15 @@ function canEdit() { return currentIsAdmin || currentCanEdit; }
 let trainerProfilesLoaded = false;
 let mannschaftSuggestions = [];
 
+// Zuletzt getippter, noch nicht hochgeladener Spielbericht-Text je Auftrag-Id.
+// renderAuftraege() baut die komplette Liste per innerHTML neu auf (wie überall
+// in dieser Flotte) -- OHNE das hier würde jede ANDERE Aktion auf der Seite
+// (z.B. "Als erledigt markieren", oder "Ordner anlegen" bei einem anderen
+// Auftrag) das komplette DOM inkl. aller Textareas wegwerfen und lautlos noch
+// nicht hochgeladenen Text zerstören (gleiche Bug-Familie wie
+// Autosave-Flush-bei-Navigation in anderen Apps dieser Flotte).
+let spielberichtDrafts = {};
+
 function escapeHtml(s) {
   return String(s || "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -233,10 +242,13 @@ function spielberichtBoxHtml(a) {
   const hochgeladenInfo = a.spielberichtHochgeladenAm
     ? `<div class="auftrag-meta muted">Spielbericht hochgeladen von ${escapeHtml(personName(a.spielberichtHochgeladenVonVorname, a.spielberichtHochgeladenVonNachname, a.spielberichtHochgeladenVon))} am ${escapeHtml(fmtDate(a.spielberichtHochgeladenAm))}</div>`
     : "";
+  // Noch nicht hochgeladener Entwurf hat Vorrang vor dem zuletzt gespeicherten
+  // Stand -- siehe spielberichtDrafts weiter oben.
+  const wert = Object.prototype.hasOwnProperty.call(spielberichtDrafts, a.id) ? spielberichtDrafts[a.id] : (a.spielbericht || "");
   return `
     <div class="spielbericht-box">
       <label>Spielbericht</label>
-      <textarea class="spielbericht-text" rows="3" placeholder="z.B. Spielverlauf, Ergebnis, Torschützen ...">${escapeHtml(a.spielbericht || "")}</textarea>
+      <textarea class="spielbericht-text" rows="3" placeholder="z.B. Spielverlauf, Ergebnis, Torschützen ...">${escapeHtml(wert)}</textarea>
       <div class="btn-row" style="justify-content:flex-start; margin-top:6px;">
         <button type="button" class="btn secondary small btn-spielbericht-hochladen">Spielbericht als Word hochladen</button>
       </div>
@@ -363,6 +375,7 @@ async function handleSpielberichtHochladen(id, btn) {
     const blob = await buildSpielberichtDocxBlob(titel, text);
     const dataBase64 = await blobToBase64(blob);
     const res = await spielberichtHochladen(id, text, dataBase64);
+    delete spielberichtDrafts[id]; // erfolgreich gespeichert -- ab jetzt zeigt a.spielbericht den aktuellen Stand
     const idx = appData.auftraege.findIndex((a) => a.id === id);
     if (idx !== -1) appData.auftraege[idx] = res.auftrag;
     renderAuftraege();
@@ -475,6 +488,16 @@ async function init() {
       const b = e.target.closest(".btn-copy-link");
       copyLinkToClipboard(b.dataset.link, b);
     }
+  });
+
+  // Haelt getippten, noch nicht hochgeladenen Spielbericht-Text fest, damit er
+  // ein renderAuftraege() durch eine ANDERE Aktion (z.B. "Als erledigt
+  // markieren" auf demselben oder einem anderen Auftrag) überlebt.
+  document.getElementById("auftraege-rows").addEventListener("input", (e) => {
+    if (!e.target.classList.contains("spielbericht-text")) return;
+    const row = e.target.closest(".auftrag-row");
+    if (!row) return;
+    spielberichtDrafts[row.dataset.id] = e.target.value;
   });
 
   if (!getSessionToken()) {
