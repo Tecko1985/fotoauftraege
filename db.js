@@ -76,3 +76,12 @@ async function ordnerAnlegen(id) {
   if (typeof body.rev === "string") gatewayRev = body.rev;
   return body; // { ok:true, auftrag, rev }
 }
+
+// Lädt eine aus dem Spielbericht-Freitext erzeugte .docx (siehe buildSpielberichtDocxBlob
+// in app.js) in denselben Nextcloud-Ordner wie die Fotos. Gleiches gatewayRev-Update
+// wie ordnerAnlegen, da dieselbe Datei geschrieben wird.
+async function spielberichtHochladen(id, text, dataBase64) {
+  const body = await gatewayRequest({ action: "fotoauftrag-spielbericht-hochladen", id, text, dataBase64 });
+  if (typeof body.rev === "string") gatewayRev = body.rev;
+  return body; // { ok:true, auftrag, rev }
+}

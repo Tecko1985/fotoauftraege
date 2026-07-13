@@ -128,7 +128,7 @@ async function ensureTrainerProfiles() {
 function resetAuftragForm() {
   document.getElementById("f-mannschaft").value = "";
   document.getElementById("f-datum").value = localDateIso();
-  document.getElementById("f-notiz").value = "";
+  document.getElementById("f-gegner").value = "";
   showFormError("");
 }
 
@@ -155,7 +155,7 @@ async function submitAuftrag() {
   showFormError("");
   const mannschaft = document.getElementById("f-mannschaft").value.trim();
   const datum = document.getElementById("f-datum").value;
-  const notiz = document.getElementById("f-notiz").value.trim();
+  const gegner = document.getElementById("f-gegner").value.trim();
 
   if (!mannschaft) { showFormError("Bitte eine Mannschaft angeben."); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) { showFormError("Bitte ein gültiges Datum wählen."); return; }
@@ -169,7 +169,7 @@ async function submitAuftrag() {
       id: uuid(),
       mannschaft,
       datum,
-      notiz,
+      gegner,
       status: "offen",
       erstelltVon: currentUsername,
       erstelltVonVorname: currentVorname,
@@ -185,7 +185,12 @@ async function submitAuftrag() {
       ordnerErstelltVonNachname: null,
       ordnerErstelltAm: null,
       erledigtVon: null,
-      erledigtAm: null
+      erledigtAm: null,
+      spielbericht: "",
+      spielberichtHochgeladenVon: null,
+      spielberichtHochgeladenVonVorname: null,
+      spielberichtHochgeladenVonNachname: null,
+      spielberichtHochgeladenAm: null
     };
     await saveWithConflictRetry((data) => { data.auftraege.push(auftrag); });
     renderAuftraege();
@@ -217,6 +222,28 @@ function kannOrdnerAnlegen(a) {
   return a.status === "offen" && (canEdit() || currentMannschaften.includes(a.mannschaft));
 }
 
+// Spielbericht braucht einen existierenden Ordner (er wird dort hineingeladen) --
+// dieselbe Team-Berechtigung wie "Ordner anlegen", aber unabhängig vom Status
+// (auch nach "erledigt" noch nachtragbar/aktualisierbar).
+function kannSpielberichtHochladen(a) {
+  return !!a.ordnerPfad && (canEdit() || currentMannschaften.includes(a.mannschaft));
+}
+
+function spielberichtBoxHtml(a) {
+  const hochgeladenInfo = a.spielberichtHochgeladenAm
+    ? `<div class="auftrag-meta muted">Spielbericht hochgeladen von ${escapeHtml(personName(a.spielberichtHochgeladenVonVorname, a.spielberichtHochgeladenVonNachname, a.spielberichtHochgeladenVon))} am ${escapeHtml(fmtDate(a.spielberichtHochgeladenAm))}</div>`
+    : "";
+  return `
+    <div class="spielbericht-box">
+      <label>Spielbericht</label>
+      <textarea class="spielbericht-text" rows="3" placeholder="z.B. Spielverlauf, Ergebnis, Torschützen ...">${escapeHtml(a.spielbericht || "")}</textarea>
+      <div class="btn-row" style="justify-content:flex-start; margin-top:6px;">
+        <button type="button" class="btn secondary small btn-spielbericht-hochladen">Spielbericht als Word hochladen</button>
+      </div>
+      ${hochgeladenInfo}
+    </div>`;
+}
+
 function auftraegeSorted() {
   return appData.auftraege.slice().sort((a, b) => (b.erstelltAm || "").localeCompare(a.erstelltAm || ""));
 }
@@ -228,8 +255,7 @@ function renderAuftraege() {
   container.innerHTML = list.map((a) => `
     <div class="auftrag-row" data-id="${escapeHtml(a.id)}">
       <div class="auftrag-row-main">
-        <div class="auftrag-titel">${escapeHtml(a.mannschaft)} <span class="muted">· ${escapeHtml(fmtDatum(a.datum))}</span></div>
-        ${a.notiz ? `<div class="auftrag-notiz muted">${escapeHtml(a.notiz)}</div>` : ""}
+        <div class="auftrag-titel">${escapeHtml(a.mannschaft)}${a.gegner ? ` <span class="muted">vs. ${escapeHtml(a.gegner)}</span>` : ""} <span class="muted">· ${escapeHtml(fmtDatum(a.datum))}</span></div>
         <div class="auftrag-meta muted">Angefragt von ${escapeHtml(personName(a.erstelltVonVorname, a.erstelltVonNachname, a.erstelltVon))} am ${escapeHtml(fmtDate(a.erstelltAm))}</div>
         ${a.status === "wird-angelegt" ? `<div class="auftrag-meta muted">⏳ Wird gerade angelegt von ${escapeHtml(personName(null, null, a.ordnerWirdAngelegtVon))}…</div>` : ""}
         ${(a.status === "ordner-angelegt" || a.status === "erledigt") && a.freigabeLink ? `
@@ -240,6 +266,7 @@ function renderAuftraege() {
           <div class="auftrag-meta muted">Ordner angelegt von ${escapeHtml(personName(a.ordnerErstelltVonVorname, a.ordnerErstelltVonNachname, a.ordnerErstelltVon))} am ${escapeHtml(fmtDate(a.ordnerErstelltAm))}</div>
         ` : ""}
         ${a.status === "erledigt" ? `<div class="auftrag-meta muted">✅ Erledigt von ${escapeHtml(personName(null, null, a.erledigtVon))} am ${escapeHtml(fmtDate(a.erledigtAm))}</div>` : ""}
+        ${kannSpielberichtHochladen(a) ? spielberichtBoxHtml(a) : ""}
       </div>
       <div class="auftrag-row-actions">
         ${statusBadgeHtml(a.status)}
@@ -272,6 +299,80 @@ async function handleOrdnerAnlegen(id, btn) {
       renderAuftraege();
     } else {
       alert("Fehler: " + e.message);
+      btn.disabled = false;
+      btn.textContent = original;
+    }
+  }
+}
+
+// ---------- Spielbericht (Freitext -> minimale .docx via JSZip, dann Upload) ----------
+
+// Escaping für Freitext, der in word/document.xml-Textknoten landet -- & < >
+// sind dort die einzigen zwingend zu escapenden Zeichen.
+function escapeXmlText(str) {
+  return String(str || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Baut ein minimales, gültiges .docx (nur Titel + Fließtext-Absätze, keine
+// Formatvorlagen/Bilder) rein clientseitig über JSZip -- gleiche Bibliothek
+// wie in digitaler-stempel bereits verwendet, kein Server-seitiges ZIP/OOXML
+// nötig. Ein Absatz je Zeile des eingegebenen Texts.
+async function buildSpielberichtDocxBlob(titel, text) {
+  const absaetze = String(text || "").split(/\r?\n/)
+    .map((line) => `<w:p><w:r><w:t xml:space="preserve">${escapeXmlText(line)}</w:t></w:r></w:p>`)
+    .join("");
+  const titelXml = `<w:p><w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t xml:space="preserve">${escapeXmlText(titel)}</w:t></w:r></w:p>`;
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${titelXml}${absaetze}<w:sectPr/></w:body></w:document>`;
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypesXml);
+  zip.file("_rels/.rels", relsXml);
+  zip.file("word/document.xml", documentXml);
+  return zip.generateAsync({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+    reader.onerror = () => reject(reader.error || new Error("Datei konnte nicht gelesen werden"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function handleSpielberichtHochladen(id, btn) {
+  const row = btn.closest(".auftrag-row");
+  const textarea = row.querySelector(".spielbericht-text");
+  const text = textarea.value.trim();
+  if (!text) { alert("Bitte zuerst einen Spielbericht eintragen."); return; }
+
+  const auftrag = appData.auftraege.find((a) => a.id === id);
+  const titel = `Spielbericht ${(auftrag && auftrag.mannschaft) || ""}`
+    + (auftrag && auftrag.gegner ? ` vs. ${auftrag.gegner}` : "")
+    + (auftrag ? ` — ${fmtDatum(auftrag.datum)}` : "");
+
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Wird hochgeladen…";
+  try {
+    const blob = await buildSpielberichtDocxBlob(titel, text);
+    const dataBase64 = await blobToBase64(blob);
+    const res = await spielberichtHochladen(id, text, dataBase64);
+    const idx = appData.auftraege.findIndex((a) => a.id === id);
+    if (idx !== -1) appData.auftraege[idx] = res.auftrag;
+    renderAuftraege();
+  } catch (e) {
+    if (e instanceof ConflictError) {
+      alert("Der Auftrag wurde inzwischen geändert — Liste wird neu geladen. Bitte den Spielbericht danach erneut hochladen.");
+      try { appData = normalizeAppData(await gatewayLoad()); } catch (_) { /* ignorieren, alter Stand bleibt sichtbar */ }
+      renderAuftraege();
+    } else {
+      alert("Fehler beim Hochladen: " + e.message);
       btn.disabled = false;
       btn.textContent = original;
     }
@@ -354,6 +455,7 @@ async function init() {
     else if (e.target.closest(".btn-zuruecksetzen")) setzeZurueckAufOffen(id);
     else if (e.target.closest(".btn-erledigt")) alsErledigtMarkieren(id);
     else if (e.target.closest(".btn-delete-auftrag")) deleteAuftragAdmin(id);
+    else if (e.target.closest(".btn-spielbericht-hochladen")) handleSpielberichtHochladen(id, e.target.closest(".btn-spielbericht-hochladen"));
     else if (e.target.closest(".btn-copy-link")) {
       const b = e.target.closest(".btn-copy-link");
       copyLinkToClipboard(b.dataset.link, b);
