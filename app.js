@@ -403,13 +403,28 @@ async function alsErledigtMarkieren(id) {
   renderAuftraege();
 }
 
-async function deleteAuftragAdmin(id) {
+// Läuft NICHT über saveWithConflictRetry/dav-save (siehe db.js auftragLoeschen) --
+// das Löschen eines bereits angelegten Ordners samt Fotos/Spielbericht ist ein
+// privilegierter Nextcloud-Zugriff, der serverseitig passiert.
+async function deleteAuftragAdmin(id, btn) {
   if (!canEdit()) return;
-  if (!confirm("Diesen Auftrag wirklich endgültig löschen? Ein bereits angelegter Nextcloud-Ordner/Link bleibt davon unberührt (kein automatischer Widerruf).")) return;
-  await saveWithConflictRetry((data) => {
-    data.auftraege = data.auftraege.filter((a) => a.id !== id);
-  });
-  renderAuftraege();
+  if (!confirm("Diesen Auftrag wirklich endgültig löschen? Ein bereits angelegter Nextcloud-Ordner wird dabei inklusive aller enthaltenen Fotos und des Spielberichts unwiderruflich mitgelöscht!")) return;
+  const original = btn ? btn.textContent : null;
+  if (btn) { btn.disabled = true; btn.textContent = "Wird gelöscht…"; }
+  try {
+    await auftragLoeschen(id);
+    appData.auftraege = appData.auftraege.filter((a) => a.id !== id);
+    renderAuftraege();
+  } catch (e) {
+    if (e instanceof ConflictError) {
+      alert("Der Auftrag wurde inzwischen geändert — Liste wird neu geladen. Bitte danach ggf. erneut löschen.");
+      try { appData = normalizeAppData(await gatewayLoad()); } catch (_) { /* ignorieren, alter Stand bleibt sichtbar */ }
+      renderAuftraege();
+    } else {
+      alert("Fehler beim Löschen: " + e.message);
+      if (btn) { btn.disabled = false; btn.textContent = original; }
+    }
+  }
 }
 
 function copyLinkToClipboard(link, btn) {
@@ -454,7 +469,7 @@ async function init() {
     if (e.target.closest(".btn-ordner-anlegen")) handleOrdnerAnlegen(id, e.target.closest(".btn-ordner-anlegen"));
     else if (e.target.closest(".btn-zuruecksetzen")) setzeZurueckAufOffen(id);
     else if (e.target.closest(".btn-erledigt")) alsErledigtMarkieren(id);
-    else if (e.target.closest(".btn-delete-auftrag")) deleteAuftragAdmin(id);
+    else if (e.target.closest(".btn-delete-auftrag")) deleteAuftragAdmin(id, e.target.closest(".btn-delete-auftrag"));
     else if (e.target.closest(".btn-spielbericht-hochladen")) handleSpielberichtHochladen(id, e.target.closest(".btn-spielbericht-hochladen"));
     else if (e.target.closest(".btn-copy-link")) {
       const b = e.target.closest(".btn-copy-link");

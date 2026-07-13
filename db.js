@@ -85,3 +85,13 @@ async function spielberichtHochladen(id, text, dataBase64) {
   if (typeof body.rev === "string") gatewayRev = body.rev;
   return body; // { ok:true, auftrag, rev }
 }
+
+// Löscht den Auftrag UND (falls vorhanden) den zugehörigen Nextcloud-Ordner
+// samt Inhalt serverseitig (dedizierte Worker-Aktion, kein dav-save) --
+// anders als ordnerAnlegen/spielberichtHochladen gibt es hier keinen
+// auftrag-Rückgabewert (der Eintrag existiert danach nicht mehr).
+async function auftragLoeschen(id) {
+  const body = await gatewayRequest({ action: "fotoauftrag-loeschen", id });
+  if (typeof body.rev === "string") gatewayRev = body.rev;
+  return body; // { ok:true, rev }
+}
