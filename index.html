@@ -87,6 +87,11 @@
         diesen Link hochgeladen (z.B. auch von jemandem ohne Tools-Login), nicht über
         diese App.
       </p>
+      <p class="muted">
+        Ein Auftrag verschwindet <strong>5 Tage nach dem Anlegen</strong> automatisch aus
+        dieser Liste, damit sie nicht zuläuft. Die Fotos und der Spielbericht bleiben dabei
+        in der Nextcloud liegen — dort sind sie das Archiv des Vereins.
+      </p>
       <div class="empty-state" id="auftraege-empty" style="display:none;">Keine Aufträge vorhanden.</div>
       <div id="auftraege-rows"></div>
     </div>
@@ -110,6 +115,12 @@
           teilbaren Link. Die Fotos werden direkt über diesen Link hochgeladen, nicht über
           diese App.
         </p>
+        <p class="muted">
+          Aufträge sind Arbeitszettel, keine Ablage: sie verschwinden 5 Tage nach dem Anlegen
+          automatisch aus der Liste, und auch „Löschen“ entfernt nur den Auftrag. Die Fotos
+          und der Spielbericht bleiben in der Nextcloud erhalten und werden dort bei Bedarf
+          von Hand aufgeräumt.
+        </p>
       </div>
       <div class="card">
         <h2>Änderungen</h2>
@@ -120,8 +131,8 @@
   </main>
 </div>
 
-<script src="config.js?v=1.0"></script>
-<script src="db.js?v=1.0"></script>
-<script src="app.js?v=1.1"></script>
+<script src="config.js?v=1.1"></script>
+<script src="db.js?v=1.1"></script>
+<script src="app.js?v=1.2"></script>
 </body>
 </html>

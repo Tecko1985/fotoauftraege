@@ -264,6 +264,22 @@ function spielberichtBoxHtml(a) {
     </div>`;
 }
 
+// Tag, an dem dieser Auftrag automatisch aus der Liste faellt. Reine VORHERSAGE
+// fuer die Anzeige -- entfernt wird serverseitig beim naechsten Laden (siehe
+// AUTO_PRUNE_APPS in admin-worker.js), damit die Regel nicht an der Uhr des
+// Browsers haengt.
+function autoLoeschDatum(a) {
+  const ts = Date.parse(a.erstelltAm);
+  if (!Number.isFinite(ts)) return null;
+  return new Date(ts + AUFTRAG_AUFBEWAHRUNG_TAGE * 24 * 60 * 60 * 1000);
+}
+
+function autoLoeschHinweisHtml(a) {
+  const d = autoLoeschDatum(a);
+  if (!d) return "";
+  return `<div class="auftrag-meta muted">🗓️ Verschwindet am ${escapeHtml(d.toLocaleDateString("de-DE"))} automatisch aus dieser Liste — die Fotos bleiben in der Nextcloud.</div>`;
+}
+
 function auftraegeSorted() {
   return appData.auftraege.slice().sort((a, b) => (b.erstelltAm || "").localeCompare(a.erstelltAm || ""));
 }
@@ -277,6 +293,7 @@ function renderAuftraege() {
       <div class="auftrag-row-main">
         <div class="auftrag-titel">${escapeHtml(a.mannschaft)}${a.gegner ? ` <span class="muted">vs. ${escapeHtml(a.gegner)}</span>` : ""} <span class="muted">· ${escapeHtml(fmtDatum(a.datum))}</span></div>
         <div class="auftrag-meta muted">Angefragt von ${escapeHtml(personName(a.erstelltVonVorname, a.erstelltVonNachname, a.erstelltVon))} am ${escapeHtml(fmtDate(a.erstelltAm))}</div>
+        ${autoLoeschHinweisHtml(a)}
         ${a.status === "wird-angelegt" ? `<div class="auftrag-meta muted">⏳ Wird gerade angelegt von ${escapeHtml(personName(null, null, a.ordnerWirdAngelegtVon))}…</div>` : ""}
         ${(a.status === "ordner-angelegt" || a.status === "erledigt") && a.freigabeLink ? `
           <div class="freigabe-link-box">
@@ -425,11 +442,12 @@ async function alsErledigtMarkieren(id) {
 }
 
 // Läuft NICHT über saveWithConflictRetry/dav-save (siehe db.js auftragLoeschen) --
-// das Löschen eines bereits angelegten Ordners samt Fotos/Spielbericht ist ein
-// privilegierter Nextcloud-Zugriff, der serverseitig passiert.
+// serverseitige Aktion, damit das Editor-Recht dort geprüft wird.
+// Entfernt NUR den Listeneintrag: der Nextcloud-Ordner mit Fotos und Spielbericht
+// bleibt stehen (Vereinsarchiv), aufräumen ggf. direkt in der Nextcloud.
 async function deleteAuftragAdmin(id, btn) {
   if (!canEdit()) return;
-  if (!confirm("Diesen Auftrag wirklich endgültig löschen? Ein bereits angelegter Nextcloud-Ordner wird dabei inklusive aller enthaltenen Fotos und des Spielberichts unwiderruflich mitgelöscht!")) return;
+  if (!confirm("Diesen Auftrag aus der Liste entfernen?\n\nDer Nextcloud-Ordner mit den Fotos und dem Spielbericht bleibt erhalten — nur der Auftrag verschwindet.")) return;
   const original = btn ? btn.textContent : null;
   if (btn) { btn.disabled = true; btn.textContent = "Wird gelöscht…"; }
   try {
