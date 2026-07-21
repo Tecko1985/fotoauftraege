@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>📸 Fotoaufträge</title>
 <meta name="theme-color" content="#1a56a0" />
-<link rel="stylesheet" href="style.css?v=1.0" />
+<link rel="stylesheet" href="style.css?v=1.1" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
@@ -38,7 +38,15 @@
 
 <!-- App -->
 <div id="app-shell" style="display:none;">
+  <nav>
+    <button data-tab="auftraege" class="active">Aufträge</button>
+    <button data-tab="info">Info</button>
+  </nav>
+
   <main>
+
+    <!-- ---------- Aufträge ---------- -->
+    <section class="tab-section active" id="tab-auftraege">
 
     <div class="card" id="neuer-auftrag-card" style="display:none;">
       <div class="card-header-row">
@@ -90,16 +98,30 @@
       </div>
     </div>
 
-    <div class="card" id="changelog-panel">
-      <h3>Versionshistorie <span class="version-badge" id="version-badge-2"></span></h3>
-      <div id="changelog-list"></div>
-    </div>
+    </section>
+
+    <!-- ---------- Info ---------- -->
+    <section class="tab-section" id="tab-info">
+      <div class="card">
+        <h2>Über die Fotoaufträge <span class="version-badge" id="version-badge-2"></span></h2>
+        <p class="muted">
+          Das Social-Media-Team fragt Fotos einer Mannschaft an; der zuständige Trainer legt
+          dazu per Klick einen eigenen, freigegebenen Nextcloud-Ordner an und bekommt einen
+          teilbaren Link. Die Fotos werden direkt über diesen Link hochgeladen, nicht über
+          diese App.
+        </p>
+      </div>
+      <div class="card">
+        <h2>Änderungen</h2>
+        <div id="changelog-list"></div>
+      </div>
+    </section>
 
   </main>
 </div>
 
 <script src="config.js?v=1.0"></script>
 <script src="db.js?v=1.0"></script>
-<script src="app.js?v=1.0"></script>
+<script src="app.js?v=1.1"></script>
 </body>
 </html>

@@ -100,12 +100,20 @@ function renderHeaderUser() {
   el.textContent = "👤 " + name + mannschaftHinweis + (currentIsAdmin ? " (Admin)" : "");
 }
 
+function activateTab(name) {
+  document.querySelectorAll("nav button[data-tab]").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tab-section").forEach((s) => s.classList.toggle("active", s.id === "tab-" + name));
+}
+
+function setupTabs() {
+  document.querySelectorAll("nav button[data-tab]").forEach((b) => {
+    b.addEventListener("click", () => activateTab(b.dataset.tab));
+  });
+}
+
 function setupVersionBadge() {
   const versionBadgeHeader = document.getElementById("version-badge");
-  const openVersionHistory = () => {
-    const panel = document.getElementById("changelog-panel");
-    if (panel) panel.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const openVersionHistory = () => activateTab("info");
   versionBadgeHeader.addEventListener("click", openVersionHistory);
   versionBadgeHeader.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openVersionHistory(); }
@@ -468,6 +476,7 @@ async function init() {
   document.getElementById("version-badge").textContent = "v" + APP_VERSION;
   document.getElementById("version-badge-2").textContent = "v" + APP_VERSION;
   renderChangelog();
+  setupTabs();
   setupVersionBadge();
 
   document.getElementById("f-datum").value = localDateIso();
