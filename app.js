@@ -354,7 +354,27 @@ function escapeXmlText(str) {
 // Formatvorlagen/Bilder) rein clientseitig über JSZip -- gleiche Bibliothek
 // wie in digitaler-stempel bereits verwendet, kein Server-seitiges ZIP/OOXML
 // nötig. Ein Absatz je Zeile des eingegebenen Texts.
+// JSZip steht nicht mehr fest im <head>: gebraucht wird es nur hier, beim
+// Hochladen eines Spielberichts. Erster Bedarf laedt nach, jeder weitere
+// Aufruf bekommt dieselbe Promise.
+let jsZipLadevorgang = null;
+function ladeJsZip() {
+  if (jsZipLadevorgang) return jsZipLadevorgang;
+  jsZipLadevorgang = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => {
+      jsZipLadevorgang = null; // naechster Versuch darf es erneut probieren
+      reject(new Error("ZIP-Bibliothek konnte nicht geladen werden"));
+    };
+    document.head.appendChild(s);
+  });
+  return jsZipLadevorgang;
+}
+
 async function buildSpielberichtDocxBlob(titel, text) {
+  await ladeJsZip();
   const absaetze = String(text || "").split(/\r?\n/)
     .map((line) => `<w:p><w:r><w:t xml:space="preserve">${escapeXmlText(line)}</w:t></w:r></w:p>`)
     .join("");
@@ -533,10 +553,13 @@ async function init() {
   }
 
   try {
-    // fetchMe() (Identität) und gatewayLoad() (Aufträge) sind unabhängige
-    // Worker-Aufrufe — parallel statt seriell spart einen kompletten Roundtrip
-    // vorm ersten sichtbaren Inhalt.
-    const [me, data] = await Promise.all([fetchMe(), gatewayLoad()]);
+    // Nacheinander statt Promise.all — und das ist hier schneller, nicht
+    // langsamer: dav-load liefert das "me" mittlerweile gratis mit (der Worker
+    // hat nutzer.json und die Rechte-Datei für diesen Request ohnehin gelesen),
+    // der zweite Aufruf kostet also gar keinen Request mehr. Parallel wären es
+    // zwei echte Requests mit zwei Session-Prüfungen.
+    const data = await gatewayLoad();
+    const me = await fetchMe();
     currentUsername = me.username;
     currentIsAdmin = !!me.isAdmin;
     currentCanEdit = !!me.canEdit;
